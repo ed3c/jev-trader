@@ -3,39 +3,25 @@ import { startBlockFeed } from "./chain";
 import { Market } from "./market";
 import { createModel } from "./model";
 import { Trader } from "./trader";
-import { log10 } from "./book";
 import { startServer } from "./server";
+import { KuruSource,KuruVenue } from "./execution/kuru";
+import { PaperVenue } from "./execution/paper";
 
-const market = new Market();
+const market=new Market();
 await market.init();
-const model = createModel();
-
-const server = startServer(
-  { model: model.name, wallet: market.address, dryRun: config.dryRun, market: config.market, startedAt: Date.now() },
-  () => trader.history,
-);
-const trader = new Trader(
-  market,
-  model,
-  (e, t) => {
-    server.broadcast(e);
-    if (e.decision && !e.decision.late) {
-      const p = e.decision.probabilities;
-      const q = e.quote;
-      const quote = !q ? " NO QUOTE (cap or funds on both sides)" : ` ${q.side.toUpperCase()} ${q.size} @ ${q.price.toFixed(6)}${q.capped ? " capped" : ""}${q.status === "sim" ? " (sim)" : ` cancel ${q.cancel.length} ${q.txHash}`}`;
-      console.log(`#${e.block} ${e.mid.toFixed(6)} b${(p.buy * 100).toFixed(0)} s${(p.sell * 100).toFixed(0)} ${e.decision.latencyMs}ms${quote} pnl $${e.totals.pnlUsd}${t ? ` · read ${t.readMs}ms loop ${t.loopMs}ms` : ""}`);
-    }
-  },
-  (block, fill) => {
-    server.broadcastFill(block, fill);
-    console.log(`#${block} FILL ${fill.side} ${fill.size} @ ${fill.price.toFixed(6)}${fill.simulated ? " (sim)" : ` order ${fill.orderId} ${fill.txHash}`}`);
-  },
-  (block, quote) => {
-    server.broadcastQuote(block, quote);
-    if (quote.status !== "placed") console.log(`#${block} ${quote.status.toUpperCase()} ${quote.side} @ ${quote.price.toFixed(6)} gas ${quote.gasMon.toFixed(6)} MON ${quote.txHash}`);
-  },
-);
-trader.attachTradeFeed(log10(market.params.sizePrecision));
-
-console.log(`jev-trader · model=${model.name} · post-only ${config.quoteInsideTicks} tick inside the touch · horizon ${config.horizonBlocks} blocks · ${config.dryRun ? "DRY RUN" : `wallet ${market.address}`} · market ${config.market} · read ${config.readRpcUrl} · :${config.port}`);
-startBlockFeed((block) => trader.onBlock(block));
+const source=new KuruSource(market);
+const venue=config.dryRun?new PaperVenue(b=>source.read(b),source.tickSize,source.minSize,source.sizeStep,config.makerFeeBps,
+  (config.gasLimit??config.gasLimitFallback)*config.maxFeeGwei/1e9):new KuruVenue(source);
+const model=createModel();
+let server:ReturnType<typeof startServer>|undefined;
+const trader=new Trader(venue,model,{onEvent:e=>server?.broadcast(e),onAlert:a=>console.error(JSON.stringify({event:"kill_alert",...a}))});
+console.log(JSON.stringify({event:"session",sessionId:trader.sessionId,strategyHash:trader.status().strategyHash,mode:config.dryRun?"paper":"live"}));
+await trader.initialize();
+server=startServer({model:model.name,wallet:venue.address,dryRun:venue.dryRun,market:config.market,startedAt:Date.now()},()=>trader.history,
+  {status:()=>trader.status(),kill:r=>trader.halt(r),audit:()=>trader.journal.records()});
+const feed=startBlockFeed(block=>{void trader.onBlock(block).catch(()=>trader.halt("unhandled_loop_error"));});
+const watchdog=setInterval(()=>{void trader.watchdog();},Math.min(250,config.maxDataAgeMs/2));
+console.log(`Dashboard: ${server.url}dashboard`);
+let stopping=false;
+async function shutdown(){if(stopping)return;stopping=true;feed.stop();clearInterval(watchdog);await trader.close();server?.stop();}
+process.on("SIGINT",()=>{void shutdown();});process.on("SIGTERM",()=>{void shutdown();});

@@ -32,7 +32,7 @@ export default function StatsRow({
   }, [startedAt]);
 
   const decision = latest?.decision ?? null;
-  const last = decision && !decision.late ? `${decision.latencyMs} ms` : `${DASH} ms`;
+  const last = decision && !decision.late ? `${decision.latencyMs.toFixed(1)} ms` : `${DASH} ms`;
   const avg =
     Number.isFinite(avgLatencyMs) && avgLatencyMs > 0 ? `${Math.round(avgLatencyMs)}ms` : DASH;
   const totals = latest?.totals ?? null;

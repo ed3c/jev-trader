@@ -12,14 +12,15 @@ const provider = new ethers.providers.StaticJsonRpcProvider(RPC, 143);
 const params = await Kuru.ParamFetcher.getMarketParams(provider, MARKET);
 
 // Same reduction market.ts applies to the SDK book.
-function sdkToBook(b: Awaited<ReturnType<typeof Kuru.OrderBook.getFormattedL2OrderBook>>): Book {
+type ComparableBook = Pick<Book, "block" | "bid" | "ask" | "mid" | "spreadBps" | "imbalance">;
+function sdkToBook(b: Awaited<ReturnType<typeof Kuru.OrderBook.getFormattedL2OrderBook>>): ComparableBook {
   const ask = b.asks.at(-1)![0]!, bid = b.bids[0]![0]!, mid = (bid + ask) / 2;
   const near = (levels: number[][]) => levels.filter((l) => Math.abs(l[0]! - mid) / mid < 0.01).reduce((s, l) => s + l[1]!, 0);
   const bd = near(b.bids), ad = near(b.asks);
   return { block: b.blockNumber, bid, ask, mid, spreadBps: ((ask - bid) / mid) * 10_000, imbalance: bd + ad ? (bd - ad) / (bd + ad) : 0 };
 }
-const same = (a: Book, b: Book) => a.block === b.block && a.bid === b.bid && a.ask === b.ask && a.mid === b.mid && a.spreadBps === b.spreadBps && a.imbalance === b.imbalance;
-const fmt = (b: Book) => `blk=${b.block} bid=${b.bid} ask=${b.ask} mid=${b.mid} spr=${b.spreadBps.toFixed(3)} imb=${b.imbalance.toFixed(6)}`;
+const same = (a: ComparableBook, b: ComparableBook) => a.block === b.block && a.bid === b.bid && a.ask === b.ask && a.mid === b.mid && a.spreadBps === b.spreadBps && a.imbalance === b.imbalance;
+const fmt = (b: ComparableBook) => `blk=${b.block} bid=${b.bid} ask=${b.ask} mid=${b.mid} spr=${b.spreadBps.toFixed(3)} imb=${b.imbalance.toFixed(6)}`;
 const stats = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return `min=${s[0]!.toFixed(0)} p50=${s[s.length >> 1]!.toFixed(0)} mean=${(xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(0)} max=${s.at(-1)!.toFixed(0)} ms`; };
 
 const vp = await readVaultParams(provider, MARKET);

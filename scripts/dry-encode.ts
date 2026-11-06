@@ -6,10 +6,10 @@ import { ethers } from "ethers";
 import * as Kuru from "@kuru-labs/kuru-sdk";
 import OrderBookAbi from "@kuru-labs/kuru-sdk/abi/OrderBook.json";
 
-// A throwaway key, and never a dry run: this script signs (locally) but never sends. Set before
-// src/config is imported, so these imports must stay dynamic (static ones are hoisted above this).
-process.env.PRIVATE_KEY = ethers.Wallet.createRandom().privateKey;
-process.env.DRY_RUN = "false";
+// A disconnected throwaway wallet signs diagnostics locally; application live mode stays off.
+const offlineWallet = ethers.Wallet.createRandom();
+process.env.MODE = "paper";
+process.env.DRY_RUN = "true";
 const { config } = await import("../src/config");
 const { Market } = await import("../src/market");
 
@@ -24,7 +24,7 @@ const size = config.tradeSizeMon;
 const priceDec = market.params.pricePrecision.toString().length - 1, sizeDec = market.params.sizePrecision.toString().length - 1;
 const tick = Number(market.params.tickSize.toString());
 console.log(`market ${config.market} · block ${book.block} · bid ${book.bid} ask ${book.ask} · tick ${tick / 10 ** priceDec} · size ${size} MON · ${config.quoteInsideTicks} tick inside`);
-console.log(`wallet ${market.address} (random, unfunded)\n`);
+console.log(`wallet ${offlineWallet.address} (random, unfunded)\n`);
 
 let failed = false;
 const check = (label: string, ok: boolean) => { console.log(`${ok ? "ok  " : "FAIL"} ${label}`); if (!ok) failed = true; };
@@ -32,7 +32,7 @@ for (const side of ["buy", "sell"] as const) {
   const price = market.quotePrice(side, book);
   const cancel = [123, 456];
   const tx = market.buildTx(side, size, price, cancel);
-  const signed = await market.wallet!.signTransaction(tx);
+  const signed = await offlineWallet.signTransaction(tx);
   const parsed = ethers.utils.parseTransaction(signed);
   const d = iface.decodeFunctionData("batchUpdate", parsed.data);
   // ethers decodes uint32 as number and uint96/uint40 as BigNumber; normalise everything to BigNumber.

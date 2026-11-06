@@ -1,5 +1,11 @@
+.git
 node_modules
+web
 .env
+.env.*
+!.env.example
 data
-scripts
-.claude
+backups
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

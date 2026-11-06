@@ -5,19 +5,26 @@
   "private": true,
   "license": "MIT",
   "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^7.0.2"
+    "@types/bun": "1.4.2",
+    "typescript": "7.0.2"
   },
   "dependencies": {
-    "@ai-sdk/typesafe-ai": "^3.0.0",
     "@kuru-labs/kuru-sdk": "^0.0.95",
-    "ai": "^7.0.103",
     "ethers": "5"
   },
   "scripts": {
     "start": "bun run src/index.ts",
-    "dev": "bun --watch run src/index.ts"
-  }
+    "dev": "bun --watch run src/index.ts",
+    "test": "bun test ./tests",
+    "typecheck": "tsc --noEmit",
+    "demo": "bun run scripts/paper-demo.ts",
+    "evaluate": "bun run scripts/evaluate.ts",
+    "quant": "bun run scripts/quant.ts",
+    "desk": "bun run scripts/desk.ts",
+    "readiness": "bun run scripts/readiness.ts",
+    "decision:smoke": "bun run scripts/decision-smoke.ts",
+    "verify": "bun run typecheck && bun run test",
+    "backup": "bun run scripts/backup.ts"
+  },
+  "packageManager": "bun@1.4.4"
 }

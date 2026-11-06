@@ -10,14 +10,14 @@ const ROW_H = 26;
 /** Hard ceiling, so a very tall viewport does not render an absurd list. */
 const MAX_ROWS = 40;
 
-type Kind = "buy" | "sell" | "late";
+type Kind = "buy" | "sell" | "hold" | "late";
 
 function kindOf(event: BlockEvent): Kind {
   const d = event.decision;
   if (!d || d.late) return "late";
   if (d.action === "buy") return "buy";
   if (d.action === "sell") return "sell";
-  return "late";
+  return "hold";
 }
 
 function fmtSize(size: number): string {
@@ -28,9 +28,10 @@ const KIND_CLASS: Record<Kind, string> = {
   buy: styles.kindBuy,
   sell: styles.kindSell,
   late: styles.kindLate,
+  hold: styles.kindLate,
 };
 
-const WORD: Record<Kind, string> = { buy: "BUY", sell: "SELL", late: "LATE" };
+const WORD: Record<Kind, string> = { buy: "BUY", sell: "SELL", hold: "HOLD", late: "LATE" };
 
 /**
  * One row per block. The word is the side the model picked, the detail is the order that went on
@@ -80,14 +81,14 @@ export default function Feed({ events }: { events: BlockEvent[] }) {
             const conf =
               !decided || !decision
                 ? ""
-                : "conf " +
+                : (event.evidence?.source === "deterministic" ? "score " : "p ") +
                   Math.max(
                     decision.probabilities.buy,
                     decision.probabilities.sell,
                     decision.probabilities.hold,
                   ).toFixed(2);
 
-            const lat = !decided || !decision ? "" : `${decision.latencyMs}ms`;
+            const lat = !decided || !decision ? "" : `${decision.latencyMs.toFixed(1)}ms`;
 
             let detail = "";
             let detailMuted = false;

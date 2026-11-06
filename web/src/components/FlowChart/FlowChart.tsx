@@ -183,17 +183,10 @@ export default function FlowChart({
   const shown = latest ?? events[events.length - 1] ?? null;
   const d = shown?.decision ?? null;
   const late = d?.late === true;
-  const act = late ? "late" : (d?.action ?? "hold");
-  const word =
-    act === "buy" ? "Buying" : act === "sell" ? "Selling" : act === "late" ? "Missed the block" : "Holding";
-  const wordColor =
-    act === "buy"
-      ? "var(--buy-ink)"
-      : act === "sell"
-        ? "var(--sell-ink)"
-        : act === "late"
-          ? "var(--late-ink)"
-          : "var(--ink)";
+  const act = shown?.health?.reason ? "kill" : late ? "late" : (shown?.policy?.action ?? "hold");
+  const words: Record<string, string> = { quote_both: "Two sides", quote_wide: "Wide quotes", reduce_inventory: "Reducing", pull_quotes: "Pull quotes", hold: "Holding", kill: "Paused", late: "Waiting" };
+  const word = words[act] ?? "Observing";
+  const wordColor = act === "kill" ? "var(--sell-ink)" : act === "late" || act === "pull_quotes" ? "var(--late-ink)" : "var(--ink)";
   const wordRef = useRef<{ act: string; block: number }>({ act, block: shown?.block ?? 0 });
   if (wordRef.current.act !== act) wordRef.current = { act, block: shown?.block ?? 0 };
   const conf = d ? Math.max(d.probabilities.buy, d.probabilities.sell, d.probabilities.hold) : 0;
@@ -350,7 +343,7 @@ export default function FlowChart({
               </div>
               <div className={styles.sub}>
                 <span>{!d || late ? "late" : `${Math.round(d.latencyMs)} ms`}</span>
-                <span>conf {fmtConf(conf)}</span>
+                <span>{shown?.evidence?.source === "deterministic" ? "rules" : `p ${fmtConf(conf)}`}</span>
               </div>
             </div>
           </>
