@@ -135,19 +135,61 @@
   pointer-events: none;
 }
 
-.tl {
+.summary {
   position: absolute;
   top: 18px;
   left: 22px;
+  right: 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: start;
+  gap: 14px 20px;
   pointer-events: none;
 }
 
+.tl,
 .tr {
-  position: absolute;
-  top: 18px;
-  right: 22px;
+  min-width: 0;
+}
+
+.tr {
   text-align: right;
-  pointer-events: none;
+}
+
+/* The chart can be narrow inside a desktop layout too. JS measures this panel,
+   rather than the viewport, and keeps the SVG below the actual summary height. */
+.panel[data-compact="true"] .summary {
+  left: 18px;
+  right: 18px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.panel[data-compact="true"] .price {
+  font-size: 30px;
+}
+
+.panel[data-compact="true"] .tr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+  text-align: left;
+}
+
+.panel[data-compact="true"] .word {
+  font-size: 26px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.panel[data-compact="true"] .tr .sub {
+  margin-top: 0;
+  justify-content: flex-start;
+}
+
+.panel[data-compact="true"] .wordPop {
+  transform-origin: left center;
 }
 
 .price {
@@ -155,6 +197,7 @@
   letter-spacing: -0.02em;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
   line-height: 1.1;
   animation: fadeIn 0.3s ease-out;
 }
@@ -172,7 +215,11 @@
   font: 400 12px var(--font-sans), sans-serif;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
-  white-space: nowrap;
+}
+
+.sub > span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .tr .sub {

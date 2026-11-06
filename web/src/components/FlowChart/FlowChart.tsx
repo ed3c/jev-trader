@@ -8,7 +8,9 @@ import styles from "./FlowChart.module.css";
 
 const STEP = 10; // px per block
 const ANCHOR_GAP = 88; // newest point sits this far from the right edge
-const PAD_TOP = 84; // overlays live here
+const COMPACT_WIDTH = 520; // use the actual panel width, including narrow desktop columns
+const SUMMARY_TOP = 18;
+const SUMMARY_GAP = 20;
 const PAD_BOTTOM = 72; // block strip + tag clearance
 const EASE = 0.1; // scale easing per new block
 const MIN_RANGE_PCT = 0.002; // floor of 0.20% of price, so bps noise stays calm
@@ -32,10 +34,12 @@ export default function FlowChart({
   latest: BlockEvent | null;
 }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const summaryRef = useRef<HTMLDivElement | null>(null);
   const originRef = useRef<number | null>(null);
   const scaleRef = useRef<{ lo: number; hi: number; block: number } | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [hover, setHover] = useState<number | null>(null);
+  const [summaryHeight, setSummaryHeight] = useState(0);
   const gid = useId().replace(/[^a-zA-Z0-9]/g, "");
 
   useEffect(() => {
@@ -54,9 +58,12 @@ export default function FlowChart({
   }, []);
 
   const { w, h } = size;
+  const compact = w < COMPACT_WIDTH;
+  // Reserve the measured summary height so wrapped provenance never covers the plot.
+  const plotTop = Math.max(compact ? 144 : 84, SUMMARY_TOP + summaryHeight + SUMMARY_GAP);
 
   const model = useMemo(() => {
-    const plotH = h - PAD_TOP - PAD_BOTTOM;
+    const plotH = h - plotTop - PAD_BOTTOM;
     if (w < 160 || plotH < 60) return null;
 
     const n = Math.max(2, Math.ceil((w - ANCHOR_GAP) / STEP) + 2);
@@ -109,7 +116,7 @@ export default function FlowChart({
     scaleRef.current = { lo, hi, block: last.block };
 
     const range = hi - lo || 1;
-    const fy = (p: number) => PAD_TOP + (1 - (p - lo) / range) * plotH;
+    const fy = (p: number) => plotTop + (1 - (p - lo) / range) * plotH;
 
     const pts = series.map((e) => [fx(e.block), fy(e.mid)] as const);
     const line = smoothPath(pts);
@@ -133,7 +140,7 @@ export default function FlowChart({
       }));
 
     const ticks = [0.25, 0.5, 0.75].map((f) => ({
-      y: PAD_TOP + plotH * f,
+      y: plotTop + plotH * f,
       label: fmtPrice(lo + (1 - f) * range),
     }));
 
@@ -155,7 +162,7 @@ export default function FlowChart({
       shift: w - ANCHOR_GAP - fx(last.block),
       endY: fy(last.mid),
     };
-  }, [events, latest, w, h]);
+  }, [events, latest, w, h, plotTop]);
 
   const hv = useMemo(() => {
     if (!model || hover === null) return null;
@@ -163,7 +170,7 @@ export default function FlowChart({
     if (!e) return null;
     const x = model.fx(e.block);
     const flip = x + model.shift > w - 168;
-    const ty = Math.min(Math.max(model.fy(e.mid) - 92, PAD_TOP - 46), model.base - 82);
+    const ty = Math.max(plotTop, Math.min(model.fy(e.mid) - 92, model.base - 82));
     const side = e.fill ? (e.fill.side === "buy" ? "BUY" : "SELL") : null;
     const q = e.quote;
     const quoteText = q ? `${q.side === "buy" ? "bid" : "ask"} ${fmtPrice(q.price)}` : "no quote";
@@ -178,7 +185,7 @@ export default function FlowChart({
       tint: e.fill ? (e.fill.side === "buy" ? "var(--buy-ink)" : "var(--sell-ink)") : q ? (q.side === "buy" ? "var(--buy-ink)" : "var(--sell-ink)") : "var(--muted)",
       lat: e.decision && !e.decision.late ? `${Math.round(e.decision.latencyMs)} ms` : "late",
     };
-  }, [model, hover, w]);
+  }, [model, hover, w, plotTop]);
 
   const shown = latest ?? events[events.length - 1] ?? null;
   const d = shown?.decision ?? null;
@@ -197,12 +204,28 @@ export default function FlowChart({
       : `${pos.side} ${fmtMon(pos.size, Number.isInteger(pos.size) ? 0 : 3)}`;
   const pnlMon = shown?.totals?.pnlMon ?? 0;
   const pnlPct = shown?.totals?.pnlPct ?? 0;
+  const hasSummary = Boolean(model && shown);
+
+  useEffect(() => {
+    const el = summaryRef.current;
+    if (!el) return;
+    const measure = () => {
+      const height = Math.ceil(el.getBoundingClientRect().height);
+      setSummaryHeight((previous) => previous === height ? previous : height);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasSummary]);
 
   return (
     <div className={styles.wrap}>
       <div
         ref={panelRef}
         className={styles.panel}
+        data-testid="chart-panel"
+        data-compact={compact ? "true" : "false"}
         onPointerMove={(ev) => {
           if (ev.pointerType !== "mouse" || !model || originRef.current === null) return;
           const r = ev.currentTarget.getBoundingClientRect();
@@ -215,7 +238,7 @@ export default function FlowChart({
           <div className={styles.empty}>waiting for blocks…</div>
         ) : (
           <>
-            <svg className={styles.svg} viewBox={`0 0 ${w} ${h}`} width={w} height={h} aria-hidden="true">
+            <svg className={styles.svg} data-testid="chart-plot" data-plot-top={plotTop} data-plot-height={h - plotTop - PAD_BOTTOM} viewBox={`0 0 ${w} ${h}`} width={w} height={h} aria-hidden="true">
               <defs>
                 <linearGradient id={`g${gid}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="rgba(10,10,10,0.07)" />
@@ -229,7 +252,7 @@ export default function FlowChart({
 
               <g className={styles.slide} style={{ transform: `translateX(${model.shift.toFixed(1)}px)` }}>
                 <path d={model.area} fill={`url(#g${gid})`} />
-                <path className={styles.line} d={model.line} />
+                <path className={styles.line} data-testid="chart-price-line" d={model.line} />
                 {model.beads.map((b) => (
                   <circle
                     key={b.key}
@@ -287,7 +310,7 @@ export default function FlowChart({
                 ))}
                 {hv ? (
                   <g>
-                    <line className={styles.cross} x1={hv.x} x2={hv.x} y1={PAD_TOP - 12} y2={model.base + 10} />
+                    <line className={styles.cross} x1={hv.x} x2={hv.x} y1={plotTop - 12} y2={model.base + 10} />
                     <circle className={styles.crossDot} cx={hv.x} cy={hv.y} r="4.5" />
                     <g transform={`translate(${hv.tx.toFixed(1)},${hv.ty.toFixed(1)})`}>
                       <rect className={styles.tip} width="132" height="78" rx="10" />
@@ -319,31 +342,34 @@ export default function FlowChart({
 
             <div className={styles.fade} />
 
-            <div className={styles.tl}>
-              <div className={styles.price} key={shown.mid}>
-                {fmtPrice(shown.mid)}
+            <div ref={summaryRef} className={styles.summary} data-testid="chart-summary">
+              <div className={styles.tl}>
+                <div className={styles.price} data-testid="chart-price" key={shown.mid}>
+                  {fmtPrice(shown.mid)}
+                </div>
+                <div className={styles.sub}>
+                  <span>MON/USDC</span>
+                  <span>Kuru</span>
+                  <span>{stance}</span>
+                  <span style={{ color: pnlMon >= 0 ? "var(--pnl-pos)" : "var(--pnl-neg)" }}>
+                    p&amp;l {fmtSignedMon(pnlMon, 3)} ({fmtSigned(pnlPct, 2)}%)
+                  </span>
+                </div>
               </div>
-              <div className={styles.sub}>
-                <span>MON/USDC</span>
-                <span>Kuru</span>
-                <span>{stance}</span>
-                <span style={{ color: pnlMon >= 0 ? "var(--pnl-pos)" : "var(--pnl-neg)" }}>
-                  p&amp;l {fmtSignedMon(pnlMon, 3)} ({fmtSigned(pnlPct, 2)}%)
-                </span>
-              </div>
-            </div>
 
-            <div className={styles.tr}>
-              <div
-                className={`${styles.word} ${styles.wordPop}`}
-                key={`${wordRef.current.block}-${act}`}
-                style={{ color: wordColor }}
-              >
-                {word}
-              </div>
-              <div className={styles.sub}>
-                <span>{!d || late ? "late" : `${Math.round(d.latencyMs)} ms`}</span>
-                <span>{shown?.evidence?.source === "deterministic" ? "rules" : `p ${fmtConf(conf)}`}</span>
+              <div className={styles.tr}>
+                <div
+                  className={`${styles.word} ${styles.wordPop}`}
+                  data-testid="chart-policy"
+                  key={`${wordRef.current.block}-${act}`}
+                  style={{ color: wordColor }}
+                >
+                  {word}
+                </div>
+                <div className={styles.sub}>
+                  <span>{!d || late ? "late" : `${Math.round(d.latencyMs)} ms`}</span>
+                  <span data-testid="chart-provenance">{shown?.evidence?.source === "deterministic" ? "rules" : `p ${fmtConf(conf)}`}</span>
+                </div>
               </div>
             </div>
           </>
