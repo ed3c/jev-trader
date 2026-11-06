@@ -1,0 +1,53 @@
+name: Verify trading system
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - run: bun install --frozen-lockfile
+      - run: bun run verify
+      - run: bun run demo --blocks 100 --data-dir /tmp/jev-ci-paper
+      - run: bun run quant --model all
+      - run: bun run evaluate --synthetic --output /tmp/jev-evaluation.json
+      - run: bun run decision:smoke
+      - run: bun run desk demo --journal /tmp/jev-ci-desk.sqlite
+  dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run build
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:3100
+      - run: bun install --frozen-lockfile
+        working-directory: .
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dashboard-browser-evidence
+          path: |
+            web/playwright-report/
+            web/test-results/
+          retention-days: 14

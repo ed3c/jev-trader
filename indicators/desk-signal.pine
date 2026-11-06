@@ -1,0 +1,49 @@
+//@version=6
+indicator("Desk Signal", overlay = true, max_boxes_count = 2) // Render the requested indicator with only the latest confirmed support and resistance zones.
+int breakoutLength = input.int(20, "Breakout lookback", minval = 2) // Compare the closing price against prior bars only.
+int volumeLength = input.int(20, "Volume average length", minval = 2) // Use the requested twenty-bar volume baseline by default.
+float volumeMultiple = input.float(1.5, "Required relative volume", minval = 0.1, step = 0.1) // Require active volume on both buy and sell breakouts.
+int pivotLeft = input.int(3, "Pivot left bars", minval = 1, maxval = 30) // Set the historical side of a confirmed swing.
+int pivotRight = input.int(3, "Pivot confirmation bars", minval = 1, maxval = 30) // Wait for these subsequent bars before a swing becomes known.
+float zoneWidthAtr = input.float(0.15, "Zone half width in ATR", minval = 0.01, step = 0.01) // Give each support or resistance level a visible price band.
+float ema8 = ta.ema(close, 8) // Compute the fastest ribbon line.
+float ema21 = ta.ema(close, 21) // Compute the short trend ribbon line.
+float ema50 = ta.ema(close, 50) // Compute the medium trend ribbon line.
+float ema200 = ta.ema(close, 200) // Compute the long trend ribbon line.
+bool bullishStack = ema8 > ema21 and ema21 > ema50 and ema50 > ema200 // Require all four EMAs to be stacked upward.
+bool bearishStack = ema8 < ema21 and ema21 < ema50 and ema50 < ema200 // Require all four EMAs to be stacked downward.
+color ribbonColor = bullishStack ? color.new(color.green, 80) : bearishStack ? color.new(color.red, 80) : color.new(color.gray, 95) // Color only confirmed ordering, with neutral gray otherwise.
+p8 = plot(ema8, title = "EMA 8", color = color.teal) // Keep the fastest line visible.
+p21 = plot(ema21, title = "EMA 21", color = color.blue) // Keep the short line visible.
+p50 = plot(ema50, title = "EMA 50", color = color.orange) // Keep the medium line visible.
+p200 = plot(ema200, title = "EMA 200", color = color.purple) // Keep the long line visible.
+fill(p8, p21, color = ribbonColor, title = "Ribbon 8 to 21") // Fill the first band according to the complete stack.
+fill(p21, p50, color = ribbonColor, title = "Ribbon 21 to 50") // Fill the second band with the same trend state.
+fill(p50, p200, color = ribbonColor, title = "Ribbon 50 to 200") // Fill the final band with the same trend state.
+float priorHigh = ta.highest(high, breakoutLength)[1] // Exclude the current candle so a close can exceed the comparison high.
+float priorLow = ta.lowest(low, breakoutLength)[1] // Exclude the current candle for the symmetric downside breakout.
+float averageVolume = ta.sma(volume, volumeLength) // Measure current volume relative to its twenty-bar average.
+float rsi14 = ta.rsi(close, 14) // Compute the required RSI direction filter.
+float atr14 = ta.atr(14) // Compute the required volatility measure.
+float atr90 = ta.percentile_nearest_rank(atr14, 100, 90) // Estimate the top-decile boundary over the latest one hundred ATR observations.
+bool warm = bar_index >= 199 and not na(priorHigh) and not na(priorLow) and not na(averageVolume) and not na(rsi14) and not na(atr90) // Wait for indicator history rather than emitting warmup signals.
+bool volatilityAllowed = not na(atr14) and not na(atr90) and atr14 <= atr90 // Block volatility strictly above the ninetieth-percentile boundary; equal ties remain allowed.
+bool activeVolume = not na(volume) and averageVolume > 0 and volume >= volumeMultiple * averageVolume // Missing or zero volume cannot authorize a signal.
+bool buySignal = barstate.isconfirmed and warm and volatilityAllowed and activeVolume and close > priorHigh and rsi14 > 50 // Fire only after a closed bullish breakout with volume and RSI confirmation.
+bool sellSignal = barstate.isconfirmed and warm and volatilityAllowed and activeVolume and close < priorLow and rsi14 < 50 // Use the exact directional opposite while retaining the same volume and volatility requirements.
+plotshape(buySignal, title = "BUY", text = "BUY", style = shape.labelup, location = location.belowbar, color = color.green, textcolor = color.white, size = size.tiny) // Show each confirmed buy event on its actual signal bar.
+plotshape(sellSignal, title = "SELL", text = "SELL", style = shape.labeldown, location = location.abovebar, color = color.red, textcolor = color.white, size = size.tiny) // Show each confirmed sell event on its actual signal bar.
+float confirmedHigh = ta.pivothigh(high, pivotLeft, pivotRight) // A pivot appears only after its right-side confirmation bars exist.
+float confirmedLow = ta.pivotlow(low, pivotLeft, pivotRight) // Apply the same confirmation rule to a swing low.
+var box resistanceZone = na // Retain only the latest confirmed resistance zone.
+var box supportZone = na // Retain only the latest confirmed support zone.
+if barstate.isconfirmed and not na(confirmedHigh) and not na(atr14) // Update resistance only at the close when the pivot is confirmed.
+    if not na(resistanceZone) // Remove the previous resistance zone before replacing it.
+        box.delete(resistanceZone) // Keep object count bounded and avoid stale support claims.
+    resistanceZone := box.new(left = bar_index, top = confirmedHigh + atr14 * zoneWidthAtr, right = bar_index + 1, bottom = confirmedHigh - atr14 * zoneWidthAtr, border_color = color.new(color.red, 40), bgcolor = color.new(color.red, 90), extend = extend.right) // Start at confirmation time instead of backpainting knowledge onto the earlier pivot candle.
+if barstate.isconfirmed and not na(confirmedLow) and not na(atr14) // Update support only after the low pivot is confirmed.
+    if not na(supportZone) // Remove the previous support zone before replacing it.
+        box.delete(supportZone) // Keep the latest confirmed level as requested.
+    supportZone := box.new(left = bar_index, top = confirmedLow + atr14 * zoneWidthAtr, right = bar_index + 1, bottom = confirmedLow - atr14 * zoneWidthAtr, border_color = color.new(color.green, 40), bgcolor = color.new(color.green, 90), extend = extend.right) // Display the known support band from its confirmation bar onward.
+alertcondition(buySignal, title = "Desk Signal BUY", message = '{"indicator":"Desk Signal","signal":"BUY","ticker":"{{ticker}}","time":"{{time}}","close":{{close}}}') // Expose the buy condition for a user-created TradingView alert.
+alertcondition(sellSignal, title = "Desk Signal SELL", message = '{"indicator":"Desk Signal","signal":"SELL","ticker":"{{ticker}}","time":"{{time}}","close":{{close}}}') // Expose the sell condition; alerts remain observations and cannot bypass desk approval.

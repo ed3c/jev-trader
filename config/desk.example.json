@@ -1,0 +1,44 @@
+{
+  "mode": "local-paper",
+  "journal": "data/desk.sqlite",
+  "input": "data/desk-input.json",
+  "calendar": "nyse-2026",
+  "pollIntervalMs": 15000,
+  "allowSyntheticDemo": false,
+  "rules": {
+    "paperCapital": 10000,
+    "maxRiskFraction": 0.01,
+    "maxDailyLossFraction": 0.02,
+    "maxPositions": 5,
+    "maxGrossExposureFraction": 1,
+    "maxCorrelatedRiskFraction": 0.01,
+    "correlationThreshold": 0.7,
+    "minPrice": 5,
+    "maxQuoteAgeMs": 60000,
+    "maxRiskAgeMs": 60000,
+    "approvalTtlMs": 900000,
+    "maxPriceDeviationFraction": 0.005,
+    "maxLossStreak": 3
+  },
+  "tradingview": {
+    "endpoint": null,
+    "accessTokenEnv": "TRADINGVIEW_OAUTH_ACCESS_TOKEN",
+    "allowedReadTools": [],
+    "status": "External endpoint, account consent and exact read tool names must be verified before configuration",
+    "setupTools": {}
+  },
+  "alpaca": {
+    "paper": true,
+    "allowPaperOrders": false,
+    "apiKeyEnv": "ALPACA_API_KEY",
+    "secretKeyEnv": "ALPACA_SECRET_KEY"
+  },
+  "journalExport": "data/trade-journal.csv",
+  "remoteJournal": {
+    "provider": null,
+    "allowWrites": false,
+    "sheetsTokenEnv": "SHEETS_OAUTH_ACCESS_TOKEN",
+    "notionTokenEnv": "NOTION_ACCESS_TOKEN",
+    "destinationFile": null
+  }
+}

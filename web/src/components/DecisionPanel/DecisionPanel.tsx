@@ -50,7 +50,7 @@ function BarRow({ label, labelColor, active, value, fill, pct }: BarRowProps) {
 export default function DecisionPanel({ latest }: DecisionPanelProps) {
   const decision = latest?.decision ?? null;
   const late = decision ? decision.late : true;
-  // "hold" is treated as a non-decision, exactly as the feed does.
+  // Directional probabilities remain separate from the execution policy.
   const chosen: Chosen =
     decision && !decision.late && decision.action !== "hold"
       ? decision.action
@@ -60,26 +60,26 @@ export default function DecisionPanel({ latest }: DecisionPanelProps) {
   const decided = decision !== null && !late && chosen !== null;
   const pctOf = (p: number) => (decided ? fmtPct(p) : "-");
 
-  const headline = chosen ? (chosen === "buy" ? "BUY" : "SELL") : "LATE";
+  const headline = latest?.health?.reason ? "PAUSED" : latest?.policy?.action?.replaceAll("_", " ").toUpperCase() ?? (late ? "WAITING" : "OBSERVE");
   const headlineColor = chosen
     ? chosen === "buy"
       ? "var(--buy-ink)"
       : "var(--sell-ink)"
     : "var(--late-ink)";
-  const headlinePct = chosen ? fmtPct(probs[chosen]) : "";
+  const headlinePct = chosen && latest?.evidence?.source !== "deterministic" ? fmtPct(probs[chosen]) : "";
 
   return (
     <div className={styles.panel}>
       <section className={styles.section}>
-        <div className={styles.sectionLabel}>STANDING ORDER</div>
+        <div className={styles.sectionLabel}>EXECUTION POLICY</div>
         <div className={styles.order}>
-          {"> post a bid or an ask on Kuru's MON/USDC book. every block. no abstaining."}
+          {"> evaluate the market, check risk, then quote, reduce or abstain."}
         </div>
       </section>
 
       <section className={styles.section}>
         <div className={`${styles.sectionLabel} ${styles.sectionLabelGap}`}>
-          WHICH SIDE THIS BLOCK?
+          POLICY / DIRECTION JUDGMENT
         </div>
 
         <div className={styles.headline} style={{ color: headlineColor }}>
@@ -105,6 +105,13 @@ export default function DecisionPanel({ latest }: DecisionPanelProps) {
           fill={chosen === "sell" ? "var(--sell-bar)" : "var(--sell-bar-dim)"}
           pct={pctOf(probs.sell)}
         />
+      </section>
+      <section className={styles.section}>
+        <div className={styles.sectionLabel}>RISK AND PROVENANCE</div>
+        <p>{latest?.health?.state ?? "Connecting"}</p>
+        <p>{latest?.health?.reason ?? latest?.policy?.reasons.join(", ") ?? "Waiting for a fresh snapshot"}</p>
+        <p>{latest?.evidence?.source === "deterministic" ? "Deterministic rules. Values are not calibrated confidence." : "Provider judgments require venue calibration."}</p>
+        <p>{latest?.health?.pending ?? 0} unresolved operations</p>
       </section>
     </div>
   );

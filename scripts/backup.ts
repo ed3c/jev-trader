@@ -1,0 +1,11 @@
+import { Database } from "bun:sqlite";
+import { resolve } from "node:path";
+import { existsSync } from "node:fs";
+const [source,destination]=process.argv.slice(2);
+if(!source||!destination)throw new Error("Usage: bun run backup -- data/engine.sqlite backups/engine.sqlite");
+if(resolve(source)===resolve(destination)||existsSync(destination))throw new Error("Backup must be a new, distinct file");
+const db=new Database(source,{readonly:true});
+db.query("VACUUM INTO ?").run(resolve(destination));db.close();
+const backup=new Database(destination,{readonly:true});
+const integrity=backup.query("PRAGMA integrity_check").get();backup.close();
+console.log(JSON.stringify({backup:destination,integrity}));

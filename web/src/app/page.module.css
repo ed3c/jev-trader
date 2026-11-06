@@ -70,6 +70,8 @@
   .chartWrap {
     flex: none;
     aspect-ratio: 4 / 3;
+    /* Stacked price/policy summaries still leave a usable chart on small phones. */
+    min-height: 360px;
   }
 
   .right {
